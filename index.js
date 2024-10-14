@@ -76,7 +76,7 @@ rl.on('line', async (input) => {
       await moveFile(args);
       break;
     case 'rm':
-      deleteFile(args);
+      await deleteFile(args);
       break;
     case 'os':
       handleOSCommands(args);
@@ -267,5 +267,34 @@ async function deleteFile(args) {
     console.log(`File ${args[1]} deleted`);
   } catch {
     console.log('Operation failed');
+  }
+}
+
+function handleOSCommands(args) {
+  if (args.length < 2) {
+    console.log('Operation failed');
+    return;
+  }
+
+  switch (args[1]) {
+    case '--EOL':
+      console.log(`EOL: ${JSON.stringify(os.EOL)}`);
+      break;
+    case '--cpus':
+      console.log(os.cpus());
+      break;
+    case '--homedir':
+      console.log(os.homedir());
+      break;
+    case '--username':
+      console.log(os.userInfo().username);
+      break;
+    case '--architecture':
+      console.log(process.arch);
+      break;
+
+    default:
+      console.log('Operation failed');
+      break;
   }
 }
