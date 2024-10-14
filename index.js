@@ -1,10 +1,13 @@
-import os from 'node:os';
-import { stdin as input, stdout as output, cwd } from 'node:process';
+import { stdin as input, stdout as output } from 'node:process';
 import readline from 'node:readline/promises';
 import path from 'node:path';
 import fs, { createReadStream, createWriteStream } from 'node:fs';
-import crypto from 'crypto';
-import { createBrotliCompress, createBrotliDecompress } from 'node:zlib';
+import { OPERATION_FAILED, INVALID_INPUT } from './src/constants.js';
+import { sayGoodBay } from './src/helpers/commons.js';
+import { handleOSCommands } from './src/helpers/os/main.js';
+import { getCurrentDir } from './src/helpers/os/getCurrentDir.js';
+import { calculateHash } from './src/helpers/hash/hashHelper.js';
+import { compressFile, decompressFile } from './src/helpers/zlib/zlibHelper.js';
 
 import {
   access,
@@ -19,12 +22,8 @@ const username = process.argv
   .find((arg) => arg.startsWith('--username='))
   .split('=')[1];
 
-const GOODBAY_TEXT = `\nThank you for using File Manager, ${username}, goodbye!`;
-
-/** Home directory */
-const home_dir = os.homedir();
 /** Current directory */
-let current_dir = cwd();
+let current_dir = getCurrentDir();
 
 console.log(`Welcome to the File Manager, ${username}!`);
 console.log(`You are currently in ${current_dir}`);
@@ -70,22 +69,23 @@ rl.on('line', async (input) => {
       handleOSCommands(args);
       break;
     case 'hash':
-      await calculateHash(args);
+      await calculateHash(args, current_dir);
       break;
     case 'compress':
-      await compressFile(args);
+      await compressFile(args, current_dir);
+
       break;
     case 'decompress':
-      await decompressFile(args);
+      await decompressFile(args, current_dir);
       break;
     default:
-      console.log('Invalid input');
+      console.log(INVALID_INPUT);
       break;
   }
 });
 
 process.on('exit', () => {
-  console.log(GOODBAY_TEXT);
+  console.log(sayGoodBay(username));
   rl.close();
 });
 
@@ -102,7 +102,7 @@ function goUp() {
 
 async function changeDirectory(args) {
   if (args.length < 2) {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
 
     return;
   }
@@ -121,7 +121,7 @@ async function changeDirectory(args) {
     current_dir = path_to_directory;
     console.log(`You are currently in ${current_dir}`);
   } catch {
-    console.log('Operation failed');
+    console.log(OPERATION_FAILED);
   }
 }
 
@@ -146,13 +146,13 @@ async function listFiles() {
 
     console.table(sortedFiles);
   } catch {
-    console.log('Operation failed');
+    console.log(OPERATION_FAILED);
   }
 }
 
 async function readFile(args) {
   if (args.length < 2) {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
     return;
   }
 
@@ -164,18 +164,18 @@ async function readFile(args) {
     if (fs.lstatSync(filePath).isFile()) {
       const readStream = createReadStream(filePath);
       readStream.pipe(process.stdout);
-      readStream.on('error', () => console.log('Operation failed'));
+      readStream.on('error', () => console.log(OPERATION_FAILED));
     } else {
-      console.log('Operation failed');
+      console.log(OPERATION_FAILED);
     }
   } catch {
-    console.log('Operation failed');
+    console.log(OPERATION_FAILED);
   }
 }
 
 async function createFile(args) {
   if (args.length < 2) {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
     return;
   }
 
@@ -184,13 +184,13 @@ async function createFile(args) {
   try {
     await writeFile(filePath, '');
   } catch {
-    console.log('Operation failed');
+    console.log(OPERATION_FAILED);
   }
 }
 
 async function renameFile(args) {
   if (args.length < 3) {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
     return;
   }
 
@@ -200,13 +200,13 @@ async function renameFile(args) {
   try {
     await rename(oldPath, newPath);
   } catch {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
   }
 }
 
 async function copyFile(args, is_move = false) {
   if (args.length < 3) {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
     return;
   }
 
@@ -220,7 +220,7 @@ async function copyFile(args, is_move = false) {
     const writeStream = createWriteStream(destPath);
 
     readStream.pipe(writeStream);
-    readStream.on('error', () => console.log('Operation failed'));
+    readStream.on('error', () => console.log(OPERATION_FAILED));
     writeStream.on('finish', () => {
       if (is_move) {
         console.log('File moved');
@@ -229,7 +229,7 @@ async function copyFile(args, is_move = false) {
       }
     });
   } catch {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
   }
 }
 
@@ -245,13 +245,13 @@ async function moveFile(args) {
       unlink(srcPath);
     }
   } catch (error) {
-    console.log('Operation failed');
+    console.log(OPERATION_FAILED);
   }
 }
 
 async function deleteFile(args) {
   if (args.length < 2) {
-    console.log('Invalid input');
+    console.log(INVALID_INPUT);
     return;
   }
 
@@ -263,105 +263,6 @@ async function deleteFile(args) {
     unlink(filePath);
     console.log(`File ${args[1]} deleted`);
   } catch {
-    console.log('Operation failed');
-  }
-}
-
-function handleOSCommands(args) {
-  if (args.length < 2) {
-    console.log('Operation failed');
-    return;
-  }
-
-  switch (args[1]) {
-    case '--EOL':
-      console.log(`EOL: ${JSON.stringify(os.EOL)}`);
-      break;
-    case '--cpus':
-      const cpus_info = os.cpus();
-      console.log(`Overall amount of CPUS is ${cpus_info.length}`);
-      console.log(cpus_info);
-      break;
-    case '--homedir':
-      console.log(home_dir);
-      break;
-    case '--username':
-      console.log(os.userInfo().username);
-      break;
-    case '--architecture':
-      console.log(process.arch);
-      break;
-
-    default:
-      console.log('Operation failed');
-      break;
-  }
-}
-
-async function calculateHash(args) {
-  if (args.length < 2) {
-    console.log('Invalid input');
-    return;
-  }
-
-  try {
-    const filePath = path.resolve(current_dir, args[1]);
-
-    await access(filePath, constants.R_OK | constants.W_OK);
-
-    const hash = crypto.createHash('sha256');
-    const readStream = createReadStream(filePath);
-    readStream.on('data', (chunk) => hash.update(chunk));
-    readStream.on('end', () => console.log(`Hash: ${hash.digest('hex')}`));
-    readStream.on('error', () => console.log('Operation failed'));
-  } catch {
-    console.log('Operation failed');
-  }
-}
-
-async function compressFile(args) {
-  if (args.length < 3) {
-    console.log('Invalid input');
-    return;
-  }
-
-  try {
-    const filePath = path.resolve(current_dir, args[1]);
-    await access(filePath, constants.R_OK | constants.W_OK);
-
-    const destPath = path.resolve(current_dir, args[2]);
-
-    const compressStream = createBrotliCompress();
-
-    const input = createReadStream(filePath);
-    const output = createWriteStream(destPath);
-
-    input.pipe(compressStream).pipe(output);
-    output.on('finish', () => console.log('File compressed'));
-  } catch {
-    console.log('Operation failed');
-  }
-}
-
-async function decompressFile(args) {
-  if (args.length < 3) {
-    console.log('Invalid input');
-    return;
-  }
-
-  try {
-    const filePath = path.resolve(current_dir, args[1]);
-    await access(filePath, constants.R_OK | constants.W_OK);
-
-    const destPath = path.resolve(current_dir, args[2]);
-    const decompressStream = createBrotliDecompress();
-
-    const input = createReadStream(filePath);
-    const output = createWriteStream(destPath);
-
-    input.pipe(decompressStream).pipe(output);
-    output.on('finish', () => console.log('File decompressed'));
-  } catch {
-    console.log('Operation failed');
+    console.log(OPERATION_FAILED);
   }
 }
