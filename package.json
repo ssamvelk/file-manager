@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "description": "Best file manager app! =D",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "type": "module",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
