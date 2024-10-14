@@ -9,8 +9,9 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
+    "start:user": "node index.js -- --username=DefultUserName",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
+  "author": "Samvel",
   "license": "ISC"
 }

@@ -1,28 +1,15 @@
-// const fs = require('fs');
-// const os = require('node:os');
 import os from 'node:os';
-// const { stdin: input, stdout: output, cwd } = require('node:process');
 import { stdin as input, stdout as output, cwd } from 'node:process';
-
-// const readline = require('node:readline/promises');
 import readline from 'node:readline/promises';
-// const path = require('node:path');
 import path from 'node:path';
-// const fs = require('node:fs/promises');
-// import { access, constants } from 'node:fs/promises';
-// const { access, readdir, lstat } = require('node:fs/promises');
-
-// import { createReadStream, createWriteStream } from 'fs';
 import fs, { createReadStream, createWriteStream } from 'node:fs';
 import crypto from 'crypto';
-
 import { createBrotliCompress, createBrotliDecompress } from 'node:zlib';
 
 import {
   access,
   constants,
   readdir,
-  lstat,
   writeFile,
   rename,
   unlink,
@@ -32,31 +19,24 @@ const username = process.argv
   .find((arg) => arg.startsWith('--username='))
   .split('=')[1];
 
-/** Домашняя папка пользователя */
-const homeDir = os.homedir();
-/** Текущая директория */
-let currentDir = cwd();
+const GOODBAY_TEXT = `\nThank you for using File Manager, ${username}, goodbye!`;
+
+/** Home directory */
+const home_dir = os.homedir();
+/** Current directory */
+let current_dir = cwd();
 
 console.log(`Welcome to the File Manager, ${username}!`);
-console.log(`You are currently in ${currentDir}`);
+console.log(`You are currently in ${current_dir}`);
 
 const rl = readline.createInterface({ input, output });
-
-process.on('SIGINT', () => {
-  console.log(`\nThank you for using File Manager, ${username}, goodbye!`);
-  rl.close();
-});
 
 rl.on('line', async (input) => {
   const args = input.split(' ');
   const command = args[0];
 
-  console.log('>>>>>>>> line args', args);
-  console.log('>>>>>>>> line input', input);
-
   switch (command) {
     case 'exit':
-      console.log(`Thank you for using File Manager, ${username}, goodbye!`);
       rl.close();
       break;
     case 'up':
@@ -104,12 +84,17 @@ rl.on('line', async (input) => {
   }
 });
 
-function goUp() {
-  const parentDir = path.dirname(currentDir);
+process.on('exit', () => {
+  console.log(GOODBAY_TEXT);
+  rl.close();
+});
 
-  if (parentDir !== currentDir) {
-    currentDir = parentDir;
-    console.log(`You are currently in ${currentDir}`);
+function goUp() {
+  const parentDir = path.dirname(current_dir);
+
+  if (parentDir !== current_dir || parentDir === '/') {
+    current_dir = parentDir;
+    console.log(`You are currently in ${current_dir}`);
   } else {
     console.log(`User can't go upper than root directory`);
   }
@@ -128,15 +113,13 @@ async function changeDirectory(args) {
     // absolute path
     path_to_directory = args[1];
   } else {
-    path_to_directory = path.resolve(currentDir, args[1]);
+    path_to_directory = path.resolve(current_dir, args[1]);
   }
-
-  // console.log('>>>>>>>>> path_to_directory', path_to_directory);
 
   try {
     await access(path_to_directory, constants.R_OK | constants.W_OK);
-    currentDir = path_to_directory;
-    console.log(`You are currently in ${currentDir}`);
+    current_dir = path_to_directory;
+    console.log(`You are currently in ${current_dir}`);
   } catch {
     console.log('Operation failed');
   }
@@ -144,12 +127,12 @@ async function changeDirectory(args) {
 
 async function listFiles() {
   try {
-    const files = await readdir(currentDir);
+    const files = await readdir(current_dir);
 
     const sortedFiles = files
       .map((file) => ({
         Name: file,
-        Type: fs.lstatSync(path.join(currentDir, file)).isDirectory()
+        Type: fs.lstatSync(path.join(current_dir, file)).isDirectory()
           ? 'directory'
           : 'file',
       }))
@@ -173,7 +156,7 @@ async function readFile(args) {
     return;
   }
 
-  const filePath = path.resolve(currentDir, args[1]);
+  const filePath = path.resolve(current_dir, args[1]);
 
   try {
     await access(filePath, constants.R_OK | constants.W_OK);
@@ -196,7 +179,7 @@ async function createFile(args) {
     return;
   }
 
-  const filePath = path.resolve(currentDir, args[1]);
+  const filePath = path.resolve(current_dir, args[1]);
 
   try {
     await writeFile(filePath, '');
@@ -211,8 +194,8 @@ async function renameFile(args) {
     return;
   }
 
-  const oldPath = path.resolve(currentDir, args[1]);
-  const newPath = path.resolve(currentDir, args[2]);
+  const oldPath = path.resolve(current_dir, args[1]);
+  const newPath = path.resolve(current_dir, args[2]);
 
   try {
     await rename(oldPath, newPath);
@@ -221,14 +204,14 @@ async function renameFile(args) {
   }
 }
 
-async function copyFile(args) {
+async function copyFile(args, is_move = false) {
   if (args.length < 3) {
     console.log('Invalid input');
     return;
   }
 
-  const srcPath = path.resolve(currentDir, args[1]);
-  const destPath = path.resolve(currentDir, args[2]);
+  const srcPath = path.resolve(current_dir, args[1]);
+  const destPath = path.resolve(current_dir, args[2]);
 
   try {
     await access(srcPath, constants.R_OK | constants.W_OK);
@@ -238,7 +221,13 @@ async function copyFile(args) {
 
     readStream.pipe(writeStream);
     readStream.on('error', () => console.log('Operation failed'));
-    writeStream.on('finish', () => console.log('File copied'));
+    writeStream.on('finish', () => {
+      if (is_move) {
+        console.log('File moved');
+      } else {
+        console.log('File copied');
+      }
+    });
   } catch {
     console.log('Invalid input');
   }
@@ -246,9 +235,9 @@ async function copyFile(args) {
 
 async function moveFile(args) {
   try {
-    await copyFile(args);
+    await copyFile(args, true);
 
-    const srcPath = path.resolve(currentDir, args[1]);
+    const srcPath = path.resolve(current_dir, args[1]);
 
     await access(srcPath, constants.R_OK | constants.W_OK);
 
@@ -266,7 +255,7 @@ async function deleteFile(args) {
     return;
   }
 
-  const filePath = path.resolve(currentDir, args[1]);
+  const filePath = path.resolve(current_dir, args[1]);
 
   try {
     await access(filePath, constants.R_OK | constants.W_OK);
@@ -289,10 +278,12 @@ function handleOSCommands(args) {
       console.log(`EOL: ${JSON.stringify(os.EOL)}`);
       break;
     case '--cpus':
-      console.log(os.cpus());
+      const cpus_info = os.cpus();
+      console.log(`Overall amount of CPUS is ${cpus_info.length}`);
+      console.log(cpus_info);
       break;
     case '--homedir':
-      console.log(os.homedir());
+      console.log(home_dir);
       break;
     case '--username':
       console.log(os.userInfo().username);
@@ -314,7 +305,7 @@ async function calculateHash(args) {
   }
 
   try {
-    const filePath = path.resolve(currentDir, args[1]);
+    const filePath = path.resolve(current_dir, args[1]);
 
     await access(filePath, constants.R_OK | constants.W_OK);
 
@@ -335,10 +326,10 @@ async function compressFile(args) {
   }
 
   try {
-    const filePath = path.resolve(currentDir, args[1]);
+    const filePath = path.resolve(current_dir, args[1]);
     await access(filePath, constants.R_OK | constants.W_OK);
 
-    const destPath = path.resolve(currentDir, args[2]);
+    const destPath = path.resolve(current_dir, args[2]);
 
     const compressStream = createBrotliCompress();
 
@@ -359,10 +350,10 @@ async function decompressFile(args) {
   }
 
   try {
-    const filePath = path.resolve(currentDir, args[1]);
+    const filePath = path.resolve(current_dir, args[1]);
     await access(filePath, constants.R_OK | constants.W_OK);
 
-    const destPath = path.resolve(currentDir, args[2]);
+    const destPath = path.resolve(current_dir, args[2]);
     const decompressStream = createBrotliDecompress();
 
     const input = createReadStream(filePath);
