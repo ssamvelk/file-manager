@@ -1,7 +1,8 @@
 import { stdin as input, stdout as output } from 'node:process';
 import readline from 'node:readline/promises';
 import path from 'node:path';
-import fs, { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { lstat } from 'node:fs/promises';
 import { OPERATION_FAILED, INVALID_INPUT } from './src/constants.js';
 import { sayGoodBay } from './src/helpers/commons.js';
 import { handleOSCommands } from './src/helpers/os/main.js';
@@ -129,22 +130,26 @@ async function listFiles() {
   try {
     const files = await readdir(current_dir);
 
-    const sortedFiles = files
-      .map((file) => ({
-        Name: file,
-        Type: fs.lstatSync(path.join(current_dir, file)).isDirectory()
-          ? 'directory'
-          : 'file',
-      }))
-      .sort((a, b) =>
-        a.Type === b.Type
-          ? a.Name.localeCompare(b.Name)
-          : a.Type === 'directory'
-          ? -1
-          : 1
-      );
+    const arr = [];
 
-    console.table(sortedFiles);
+    for await (const file of files) {
+      const type = await lstat(path.join(current_dir, file));
+
+      arr.push({
+        Name: file,
+        Type: type.isDirectory() ? 'directory' : 'file',
+      });
+    }
+
+    const sorted_files = arr.sort((a, b) =>
+      a.Type === b.Type
+        ? a.Name.localeCompare(b.Name)
+        : a.Type === 'directory'
+        ? -1
+        : 1
+    );
+
+    console.table(sorted_files);
   } catch {
     console.log(OPERATION_FAILED);
   }
@@ -161,7 +166,9 @@ async function readFile(args) {
   try {
     await access(filePath, constants.R_OK | constants.W_OK);
 
-    if (fs.lstatSync(filePath).isFile()) {
+    const stats = await lstat(filePath);
+
+    if (stats.isFile()) {
       const readStream = createReadStream(filePath);
       readStream.pipe(process.stdout);
       readStream.on('error', () => console.log(OPERATION_FAILED));
