@@ -16,6 +16,8 @@ import path from 'node:path';
 import fs, { createReadStream, createWriteStream } from 'node:fs';
 import crypto from 'crypto';
 
+import { createBrotliCompress, createBrotliDecompress } from 'node:zlib';
+
 import {
   access,
   constants,
@@ -39,6 +41,11 @@ console.log(`Welcome to the File Manager, ${username}!`);
 console.log(`You are currently in ${currentDir}`);
 
 const rl = readline.createInterface({ input, output });
+
+process.on('SIGINT', () => {
+  console.log(`\nThank you for using File Manager, ${username}, goodbye!`);
+  rl.close();
+});
 
 rl.on('line', async (input) => {
   const args = input.split(' ');
@@ -86,10 +93,10 @@ rl.on('line', async (input) => {
       await calculateHash(args);
       break;
     case 'compress':
-      compressFile(args);
+      await compressFile(args);
       break;
     case 'decompress':
-      decompressFile(args);
+      await decompressFile(args);
       break;
     default:
       console.log('Invalid input');
@@ -316,6 +323,53 @@ async function calculateHash(args) {
     readStream.on('data', (chunk) => hash.update(chunk));
     readStream.on('end', () => console.log(`Hash: ${hash.digest('hex')}`));
     readStream.on('error', () => console.log('Operation failed'));
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+async function compressFile(args) {
+  if (args.length < 3) {
+    console.log('Invalid input');
+    return;
+  }
+
+  try {
+    const filePath = path.resolve(currentDir, args[1]);
+    await access(filePath, constants.R_OK | constants.W_OK);
+
+    const destPath = path.resolve(currentDir, args[2]);
+
+    const compressStream = createBrotliCompress();
+
+    const input = createReadStream(filePath);
+    const output = createWriteStream(destPath);
+
+    input.pipe(compressStream).pipe(output);
+    output.on('finish', () => console.log('File compressed'));
+  } catch {
+    console.log('Operation failed');
+  }
+}
+
+async function decompressFile(args) {
+  if (args.length < 3) {
+    console.log('Invalid input');
+    return;
+  }
+
+  try {
+    const filePath = path.resolve(currentDir, args[1]);
+    await access(filePath, constants.R_OK | constants.W_OK);
+
+    const destPath = path.resolve(currentDir, args[2]);
+    const decompressStream = createBrotliDecompress();
+
+    const input = createReadStream(filePath);
+    const output = createWriteStream(destPath);
+
+    input.pipe(decompressStream).pipe(output);
+    output.on('finish', () => console.log('File decompressed'));
   } catch {
     console.log('Operation failed');
   }
