@@ -1,17 +1,19 @@
-import { OPERATION_FAILED } from '../../constants.js';
 import crypto from 'crypto';
 import path from 'node:path';
 import { access, constants } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 
-export async function calculateHash(args, current_dir) {
+import { OPERATION_FAILED } from '../../constants.js';
+import { getCurrentDir } from '../fs/fsHelper.js';
+
+export async function calculateHash(args) {
   if (args.length < 2) {
     console.log(INVALID_INPUT);
     return;
   }
 
   try {
-    const filePath = path.resolve(current_dir, args[1]);
+    const filePath = path.resolve(getCurrentDir(), args[1]);
 
     await access(filePath, constants.R_OK | constants.W_OK);
 

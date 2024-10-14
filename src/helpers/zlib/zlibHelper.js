@@ -1,20 +1,22 @@
-import { OPERATION_FAILED, INVALID_INPUT } from '../../constants.js';
 import path from 'node:path';
 import { createBrotliCompress, createBrotliDecompress } from 'node:zlib';
 import { access, constants } from 'node:fs/promises';
 import { createReadStream, createWriteStream } from 'node:fs';
 
-export async function compressFile(args, current_dir) {
+import { OPERATION_FAILED, INVALID_INPUT } from '../../constants.js';
+import { getCurrentDir } from '../fs/fsHelper.js';
+
+export async function compressFile(args) {
   if (args.length < 3) {
     console.log(INVALID_INPUT);
     return;
   }
 
   try {
-    const filePath = path.resolve(current_dir, args[1]);
+    const filePath = path.resolve(getCurrentDir(), args[1]);
     await access(filePath, constants.R_OK | constants.W_OK);
 
-    const destPath = path.resolve(current_dir, args[2]);
+    const destPath = path.resolve(getCurrentDir(), args[2]);
 
     const compressStream = createBrotliCompress();
 
@@ -28,17 +30,17 @@ export async function compressFile(args, current_dir) {
   }
 }
 
-export async function decompressFile(args, current_dir) {
+export async function decompressFile(args) {
   if (args.length < 3) {
     console.log(INVALID_INPUT);
     return;
   }
 
   try {
-    const filePath = path.resolve(current_dir, args[1]);
+    const filePath = path.resolve(getCurrentDir(), args[1]);
     await access(filePath, constants.R_OK | constants.W_OK);
 
-    const destPath = path.resolve(current_dir, args[2]);
+    const destPath = path.resolve(getCurrentDir(), args[2]);
     const decompressStream = createBrotliDecompress();
 
     const input = createReadStream(filePath);
