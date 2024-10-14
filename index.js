@@ -14,6 +14,7 @@ import path from 'node:path';
 
 // import { createReadStream, createWriteStream } from 'fs';
 import fs, { createReadStream, createWriteStream } from 'node:fs';
+import crypto from 'crypto';
 
 import {
   access,
@@ -82,7 +83,7 @@ rl.on('line', async (input) => {
       handleOSCommands(args);
       break;
     case 'hash':
-      calculateHash(args);
+      await calculateHash(args);
       break;
     case 'compress':
       compressFile(args);
@@ -296,5 +297,26 @@ function handleOSCommands(args) {
     default:
       console.log('Operation failed');
       break;
+  }
+}
+
+async function calculateHash(args) {
+  if (args.length < 2) {
+    console.log('Invalid input');
+    return;
+  }
+
+  try {
+    const filePath = path.resolve(currentDir, args[1]);
+
+    await access(filePath, constants.R_OK | constants.W_OK);
+
+    const hash = crypto.createHash('sha256');
+    const readStream = createReadStream(filePath);
+    readStream.on('data', (chunk) => hash.update(chunk));
+    readStream.on('end', () => console.log(`Hash: ${hash.digest('hex')}`));
+    readStream.on('error', () => console.log('Operation failed'));
+  } catch {
+    console.log('Operation failed');
   }
 }
